@@ -2135,6 +2135,7 @@ static RPCHelpMan lockunspent()
                             },
                         },
                     },
+                    {"strict", RPCArg::Type::BOOL, RPCArg::Default{true}, "if false, lockunspent will ignore transaction outputs that are locked (if lock is true) or unlocked (if lock is false)."},
                 },
                 RPCResult{
                     RPCResult::Type::BOOL, "", "Whether the command was successful or not"
@@ -2176,6 +2177,11 @@ static RPCHelpMan lockunspent()
 
     const UniValue& output_params = request.params[1];
 
+    bool fStrict = true;
+    if (!request.params[2].isNull()) {
+        fStrict = request.params[2].get_bool();
+    }
+
     // Create and validate the COutPoints first.
 
     std::vector<COutPoint> outputs;
@@ -2215,11 +2221,11 @@ static RPCHelpMan lockunspent()
 
         const bool is_locked = pwallet->IsLockedCoin(outpt.hash, outpt.n);
 
-        if (fUnlock && !is_locked) {
+        if (fStrict && fUnlock && !is_locked) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected locked output");
         }
 
-        if (!fUnlock && is_locked) {
+        if (fStrict && !fUnlock && is_locked) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output already locked");
         }
 

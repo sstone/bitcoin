@@ -121,9 +121,15 @@ class WalletTest(BitcoinTestFramework):
         # Exercise locking of unspent outputs
         unspent_0 = self.nodes[2].listunspent()[0]
         unspent_0 = {"txid": unspent_0["txid"], "vout": unspent_0["vout"]}
+        # unlocking an input that is not locked raises an exception
         assert_raises_rpc_error(-8, "Invalid parameter, expected locked output", self.nodes[2].lockunspent, True, [unspent_0])
+        # except when the "strict" flag is set to false
+        assert self.nodes[2].lockunspent(True, [unspent_0], False)
         self.nodes[2].lockunspent(False, [unspent_0])
+        # locking an output that is already locked raises an exception
         assert_raises_rpc_error(-8, "Invalid parameter, output already locked", self.nodes[2].lockunspent, False, [unspent_0])
+        # except when the "strict" flag is set to false
+        assert self.nodes[2].lockunspent(False, [unspent_0], False)
         assert_raises_rpc_error(-6, "Insufficient funds", self.nodes[2].sendtoaddress, self.nodes[2].getnewaddress(), 20)
         assert_equal([unspent_0], self.nodes[2].listlockunspent())
         self.nodes[2].lockunspent(True, [unspent_0])
