@@ -262,6 +262,7 @@ RPCHelpMan lockunspent()
                         },
                     },
                     {"persistent", RPCArg::Type::BOOL, RPCArg::Default{false}, "Whether to write/erase this lock in the wallet database, or keep the change in memory only. Ignored for unlocking."},
+                    {"ignore", RPCArg::Type::BOOL, RPCArg::Default{false}, "Whether to ignore outputs that are already locked (when locking)/unlocked (when unlocking)."},
                 },
                 RPCResult{
                     RPCResult::Type::BOOL, "", "Whether the command was successful or not"
@@ -296,6 +297,8 @@ RPCHelpMan lockunspent()
     bool fUnlock = request.params[0].get_bool();
 
     const bool persistent{request.params[2].isNull() ? false : request.params[2].get_bool()};
+
+    const bool ignore{request.params[3].isNull() ? false : request.params[3].get_bool()};
 
     if (request.params[1].isNull()) {
         if (fUnlock) {
@@ -348,15 +351,17 @@ RPCHelpMan lockunspent()
 
         const bool is_locked = pwallet->IsLockedCoin(outpt.hash, outpt.n);
 
-        if (fUnlock && !is_locked) {
+        if (fUnlock && !is_locked && !ignore) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected locked output");
+        } else {
+            outputs.push_back(outpt);
         }
 
-        if (!fUnlock && is_locked && !persistent) {
+        if (!fUnlock && is_locked && !persistent && !ignore) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output already locked");
+        } else {
+            outputs.push_back(outpt);
         }
-
-        outputs.push_back(outpt);
     }
 
     std::unique_ptr<WalletBatch> batch = nullptr;

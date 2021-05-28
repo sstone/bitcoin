@@ -123,9 +123,15 @@ class WalletTest(BitcoinTestFramework):
         # Trying to unlock an output which isn't locked should error
         assert_raises_rpc_error(-8, "Invalid parameter, expected locked output", self.nodes[2].lockunspent, True, [unspent_0])
 
+        # except when the "ignore" flag is set to true
+        assert self.nodes[2].lockunspent(True, [unspent_0], False, True)
+
         # Locking an already-locked output should error
         self.nodes[2].lockunspent(False, [unspent_0])
         assert_raises_rpc_error(-8, "Invalid parameter, output already locked", self.nodes[2].lockunspent, False, [unspent_0])
+
+        # except when the "ignore" flag is set to true
+        assert self.nodes[2].lockunspent(False, [unspent_0], False, True)
 
         # Restarting the node should clear the lock
         self.restart_node(2)
