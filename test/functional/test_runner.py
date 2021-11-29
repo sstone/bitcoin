@@ -115,6 +115,7 @@ BASE_SCRIPTS = [
     'feature_taproot.py',
     'rpc_signer.py',
     'wallet_signer.py --descriptors',
+    'wallet_signer.py --descriptors --invalid',
     # vv Tests less than 60s vv
     'p2p_sendheaders.py',
     'wallet_importmulti.py --legacy-wallet',
