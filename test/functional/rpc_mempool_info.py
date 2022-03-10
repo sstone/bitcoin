@@ -14,7 +14,12 @@ from test_framework.wallet import MiniWallet
 
 class RPCMempoolInfoTest(BitcoinTestFramework):
     def set_test_params(self):
-        self.num_nodes = 1
+        self.num_nodes = 3
+        self.extra_args = [
+            ["-txindex", "-txospenderindex"],
+            ["-txindex", "-txospenderindex"],
+            ["-txindex"],
+        ]
 
     def run_test(self):
         self.wallet = MiniWallet(self.nodes[0])
@@ -60,8 +65,13 @@ class RPCMempoolInfoTest(BitcoinTestFramework):
             assert_equal(txid in mempool, True)
 
         self.log.info("Find transactions spending outputs")
+        # spending transactions are found in the mempool of node 0 but not 1 and 2
         result = self.nodes[0].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
         assert_equal(result, [ {'txid' : confirmed_utxo['txid'], 'vout' : 0, 'spendingtxid' : txidA}, {'txid' : txidA, 'vout' : 1, 'spendingtxid' : txidC} ])
+        result = self.nodes[1].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
+        assert_equal(result, [ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
+        result = self.nodes[2].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
+        assert_equal(result, [ {'txid' : confirmed_utxo['txid'], 'vout' : 0, 'warnings': ['txospenderindex is unavailable.']}, {'txid' : txidA, 'vout' : 1, 'warnings': ['txospenderindex is unavailable.']} ])
 
         self.log.info("Find transaction spending multiple outputs")
         result = self.nodes[0].gettxspendingprevout([ {'txid' : txidE, 'vout' : 0}, {'txid' : txidF, 'vout' : 0} ])
@@ -95,6 +105,14 @@ class RPCMempoolInfoTest(BitcoinTestFramework):
         self.log.info("Missing txid")
         assert_raises_rpc_error(-3, "Missing txid", self.nodes[0].gettxspendingprevout, [{'vout' : 3}])
 
+        self.generate(self.wallet, 1)
+        # spending transactions are found in the index of nodes 0 and 1 but not node 2
+        result = self.nodes[0].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
+        assert_equal(result, [ {'txid' : confirmed_utxo['txid'], 'vout' : 0, 'spendingtxid' : txidA}, {'txid' : txidA, 'vout' : 1, 'spendingtxid' : txidC} ])
+        result = self.nodes[1].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
+        assert_equal(result, [ {'txid' : confirmed_utxo['txid'], 'vout' : 0, 'spendingtxid' : txidA}, {'txid' : txidA, 'vout' : 1, 'spendingtxid' : txidC} ])
+        result = self.nodes[2].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0}, {'txid' : txidA, 'vout' : 1} ])
+        assert_equal(result, [ {'txid' : confirmed_utxo['txid'], 'vout' : 0, 'warnings': ['txospenderindex is unavailable.']}, {'txid' : txidA, 'vout' : 1, 'warnings': ['txospenderindex is unavailable.']} ])
 
 if __name__ == '__main__':
     RPCMempoolInfoTest().main()
