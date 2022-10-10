@@ -666,6 +666,26 @@ bool CWallet::IsSpent(const COutPoint& outpoint) const
     return false;
 }
 
+bool CWallet::FindSpendingTx(const COutPoint& outpoint, uint256& hash) const
+{
+    std::pair<TxSpends::const_iterator, TxSpends::const_iterator> range;
+    range = mapTxSpends.equal_range(outpoint);
+
+    for (TxSpends::const_iterator it = range.first; it != range.second; ++it) {
+        const uint256& wtxid = it->second;
+        const auto mit = mapWallet.find(wtxid);
+        if (mit != mapWallet.end()) {
+            int depth = GetTxDepthInMainChain(mit->second);
+            if (depth > 0  || (depth == 0 && !mit->second.isAbandoned())) {
+                hash = mit->second.GetHash();
+                return true; // Spent
+            }
+        }
+    }
+    return false;
+}
+
+
 void CWallet::AddToSpends(const COutPoint& outpoint, const uint256& wtxid, WalletBatch* batch)
 {
     mapTxSpends.insert(std::make_pair(outpoint, wtxid));
