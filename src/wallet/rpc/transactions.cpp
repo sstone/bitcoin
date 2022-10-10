@@ -392,6 +392,12 @@ static void ListTransactions(const CWallet& wallet, const CWalletTx& wtx, int nM
             entry.pushKV("abandoned", wtx.isAbandoned());
             if (fLong)
                 WalletTxToJSON(wallet, wtx, entry);
+
+            uint256 hash;
+            COutPoint outpoint(wtx.GetHash(), r.vout);
+            if (wallet.FindSpendingTx(outpoint, hash)) {
+                entry.pushKV("spentBy", hash.GetHex());
+            }
             ret.push_back(entry);
         }
     }
@@ -460,6 +466,7 @@ RPCHelpMan listtransactions()
                             {RPCResult::Type::NUM, "vout", "the vout value"},
                             {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "The amount of the fee in " + CURRENCY_UNIT + ". This is negative and only available for the\n"
                                  "'send' category of transactions."},
+                            {RPCResult::Type::STR, "spentBy", /*optional=*/true, "The id of the transaction spending this transaction, if any"},
                         },
                         TransactionDescriptionString()),
                         {
@@ -573,6 +580,7 @@ RPCHelpMan listsinceblock()
                                 {RPCResult::Type::NUM, "vout", "the vout value"},
                                 {RPCResult::Type::STR_AMOUNT, "fee", /*optional=*/true, "The amount of the fee in " + CURRENCY_UNIT + ". This is negative and only available for the\n"
                                      "'send' category of transactions."},
+                                {RPCResult::Type::STR, "spentBy", /*optional=*/true, "The id of the transaction spending this transaction, if any"},
                             },
                             TransactionDescriptionString()),
                             {
@@ -724,6 +732,7 @@ RPCHelpMan gettransaction()
                                 {RPCResult::Type::ARR, "parent_descs", /*optional=*/true, "Only if 'category' is 'received'. List of parent descriptors for the scriptPubKey of this coin.", {
                                     {RPCResult::Type::STR, "desc", "The descriptor string."},
                                 }},
+                                {RPCResult::Type::STR, "spentBy", /*optional=*/true, "The id of the transaction spending this transaction, if any"},
                             }},
                         }},
                         {RPCResult::Type::STR_HEX, "hex", "Raw data for transaction"},
