@@ -8,16 +8,22 @@ from decimal import Decimal
 import os
 import shutil
 
+from test_framework.key import ECKey
 from test_framework.messages import (
     COIN,
     tx_from_hex,
 )
+from test_framework.script_util import script_to_p2sh_p2wsh_script, script_to_p2wsh_script
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_array_result,
     assert_equal,
     assert_raises_rpc_error,
 )
+from test_framework.wallet import (
+    getnewdestination,
+)
+from test_framework.wallet_util import bytes_to_wif
 
 
 class ListTransactionsTest(BitcoinTestFramework):
@@ -109,6 +115,7 @@ class ListTransactionsTest(BitcoinTestFramework):
         self.run_rbf_opt_in_test()
         self.run_externally_generated_address_test()
         self.run_invalid_parameters_test()
+        self.run_spent_by_test()
 
     def run_rbf_opt_in_test(self):
         """Test the opt-in-rbf flag for sent and received transactions."""
@@ -284,6 +291,48 @@ class ListTransactionsTest(BitcoinTestFramework):
         assert_raises_rpc_error(-8, "Negative count", self.nodes[0].listtransactions, count=-1)
         assert_raises_rpc_error(-8, "Negative from", self.nodes[0].listtransactions, skip=-1)
 
+    def run_spent_by_test(self):
+        if not self.options.descriptors:
+            # include_watchonly is a legacy wallet feature, so don't test it for descriptor wallets
+            self.log.info("Test listtransactions RPC spentBy value for a spent watchonly address")
+
+            # Create a new P2SH-P2WSH 1-of-1 multisig address:
+            eckey = ECKey()
+            eckey.generate()
+            privkey = bytes_to_wif(eckey.get_bytes())
+            pubkey = eckey.get_pubkey().get_bytes().hex()
+            commitment1 = self.nodes[1].createmultisig(1, [pubkey], "p2sh-segwit")
+            self.nodes[0].importaddress(commitment1["address"], "commitment", False)
+            commitment2 = self.nodes[1].createmultisig(1, [pubkey], "p2sh-segwit")
+            self.nodes[0].importaddress(commitment2["address"], "commitment", False)
+
+            # fund two commitment addresses
+            fund_txid = self.nodes[1].sendtoaddress(commitment1["address"], 0.002)
+            vout = self.nodes[1].gettransaction(fund_txid, True)['details'][0]['vout']
+            self.nodes[1].sendtoaddress(commitment2["address"], 0.002)
+            self.sync_all()
+
+            # Now create and sign a transaction spending the commitment1 output on node[0], which doesn't know the scripts or keys
+            commitment_output = {"txid": fund_txid, "vout": vout, "amount": 0.002}
+            spending_tx = self.nodes[0].createrawtransaction([commitment_output], {getnewdestination()[2]: Decimal("0.001")})
+            commitment_output['scriptPubKey'] = script_to_p2sh_p2wsh_script(commitment1['redeemScript']).hex()
+            commitment_output['witnessScript'] = commitment1['redeemScript']
+            commitment_output['redeemScript'] = script_to_p2wsh_script(commitment_output['witnessScript']).hex()
+            spending_tx_signed = self.nodes[0].signrawtransactionwithkey(spending_tx, [privkey], [commitment_output])
+            
+            # Check the signing completed successfully, send the transaction and mine it
+            assert 'complete' in spending_tx_signed
+            assert_equal(spending_tx_signed['complete'], True)
+            spent_txid = self.nodes[1].sendrawtransaction(spending_tx_signed['hex'])
+            self.sync_all()
+
+            # transaction list should contain correct spentBy field for commitment1 and no spentBy field for commitment2
+            spent = self.nodes[0].listtransactions(label="commitment", include_watchonly=True)
+            assert_equal(len(spent), 2)
+            assert_array_result(spent, {"txid": fund_txid}, {'spentBy': spent_txid})
+            for transaction in spent:
+                if transaction['txid'] != fund_txid:
+                    assert 'spentBy' not in transaction
 
 if __name__ == '__main__':
     ListTransactionsTest().main()
