@@ -689,6 +689,12 @@ static RPCHelpMan gettxspendingprevout()
                     uint256 spendingtxid;
                     if (g_txospenderindex->FindSpender(prevout, spendingtxid)) {
                         o.pushKV("spendingtxid", spendingtxid.GetHex());
+                        if (!f_txospenderindex_ready) {
+                            // warn if index is not ready as the spending tx that we found may be stale (it may be reorged out)
+                            UniValue warnings(UniValue::VARR);
+                            warnings.push_back("txospenderindex is still being synced.");
+                            o.pushKV("warnings", warnings);
+                        }
                     } else if (!f_txospenderindex_ready) {
                         if (mempool_only.has_value()) {  // NOTE: value is false here
                             throw JSONRPCError(RPC_MISC_ERROR, strprintf("No spending tx for the outpoint %s:%d found, and txospenderindex is still being synced.", prevout.hash.GetHex(), prevout.n));
