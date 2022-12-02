@@ -16,9 +16,9 @@ class RPCMempoolInfoTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
         self.extra_args = [
-            ["-txindex", "-txospenderindex", "-whitelist=noban@127.0.0.1"],
-            ["-txindex", "-txospenderindex", "-whitelist=noban@127.0.0.1"],
-            ["-txindex", "-whitelist=noban@127.0.0.1"],
+            ["-txospenderindex", "-whitelist=noban@127.0.0.1"],
+            ["-txospenderindex", "-whitelist=noban@127.0.0.1"],
+            ["-whitelist=noban@127.0.0.1"],
         ]
 
     def run_test(self):
@@ -147,7 +147,7 @@ class RPCMempoolInfoTest(BitcoinTestFramework):
         confirmed_utxo = self.wallet.get_utxo(mark_as_spent = False)
         tx1 = create_tx(utxos_to_spend=[confirmed_utxo], num_outputs=1)
         tx2 = create_tx(utxos_to_spend=[tx1["new_utxos"][0]], num_outputs=1)
-        # tx1 spends our utxo, tx2 spends
+        # tx1 spends our utxo, tx2 spends tx1
         self.generate(self.wallet, 1)
         # tx1 and tx2 are confirmed, and indexed in txospenderindex
         result = self.nodes[0].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0} ])
@@ -155,9 +155,10 @@ class RPCMempoolInfoTest(BitcoinTestFramework):
         result = self.nodes[0].gettxspendingprevout([ {'txid' : tx1['txid'], 'vout' : 0} ])
         assert_equal(result, [ {'txid' : tx1['txid'], 'vout' : 0, 'spendingtxid' : tx2["txid"]} ])
         # replace tx1 with tx3
-        self.nodes[0].invalidateblock(self.nodes[0].getbestblockhash())
-        self.nodes[1].invalidateblock(self.nodes[1].getbestblockhash())
-        self.nodes[2].invalidateblock(self.nodes[2].getbestblockhash())
+        blockhash= self.nodes[0].getbestblockhash()
+        self.nodes[0].invalidateblock(blockhash)
+        self.nodes[1].invalidateblock(blockhash)
+        self.nodes[2].invalidateblock(blockhash)
         tx3 = create_tx(utxos_to_spend=[confirmed_utxo], num_outputs=2, fee_per_output=2000)
         assert tx3["txid"] in self.nodes[0].getrawmempool()
         assert not tx1["txid"] in self.nodes[0].getrawmempool()
@@ -165,8 +166,10 @@ class RPCMempoolInfoTest(BitcoinTestFramework):
         # tx2 is not in the mempool anymore, but still in txospender index which has not been rewound yet
         result = self.nodes[0].gettxspendingprevout([ {'txid' : tx1['txid'], 'vout' : 0} ])
         assert_equal(result, [ {'txid' : tx1['txid'], 'vout' : 0, 'spendingtxid' : tx2["txid"]} ])
-        txinfo = self.nodes[0].getrawtransaction(tx2["txid"], True)
+        txinfo = self.nodes[0].getrawtransaction(tx2["txid"], verbose = True, blockhash = blockhash)
         assert_equal(txinfo["confirmations"], 0)
+        assert_equal(txinfo["in_active_chain"], False)
+
         self.generate(self.wallet, 1)
         # we check that the spending tx for tx1 is now tx3
         result = self.nodes[0].gettxspendingprevout([ {'txid' : confirmed_utxo['txid'], 'vout' : 0} ])

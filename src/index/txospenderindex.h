@@ -22,7 +22,7 @@ protected:
 private:
     const std::unique_ptr<DB> m_db;
 
-    bool AllowPrune() const override { return false; }
+    bool AllowPrune() const override { return true; }
 
 protected:
     bool CustomAppend(const interfaces::BlockInfo& block) override;
