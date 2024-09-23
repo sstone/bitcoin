@@ -6,6 +6,7 @@
 #define BITCOIN_INDEX_TXOSPENDERINDEX_H
 
 #include <index/base.h>
+#include <index/disktxpos.h>
 
 static constexpr bool DEFAULT_TXOSPENDERINDEX{false};
 
@@ -16,11 +17,8 @@ static constexpr bool DEFAULT_TXOSPENDERINDEX{false};
  */
 class TxoSpenderIndex final : public BaseIndex
 {
-protected:
-    class DB;
-
 private:
-    const std::unique_ptr<DB> m_db;
+    std::unique_ptr<BaseIndex::DB> m_db;
 
     bool AllowPrune() const override { return true; }
 
