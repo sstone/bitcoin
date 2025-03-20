@@ -349,6 +349,7 @@ static RPCHelpMan createwallet()
             {"descriptors", RPCArg::Type::BOOL, RPCArg::Default{true}, "If set, must be \"true\""},
             {"load_on_startup", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged."},
             {"external_signer", RPCArg::Type::BOOL, RPCArg::Default{false}, "Use an external signer such as a hardware wallet. Requires -signer to be configured. Wallet creation will fail if keys cannot be fetched. Requires disable_private_keys and descriptors set to true."},
+            {"skip_legacy_descriptors", RPCArg::Type::BOOL, RPCArg::Default{false}, "Do not create legacy (p2pkh) descriptors. Requires descriptors set to true."},
         },
         RPCResult{
             RPCResult::Type::OBJ, "", "",
@@ -401,6 +402,9 @@ static RPCHelpMan createwallet()
 #else
         throw JSONRPCError(RPC_WALLET_ERROR, "Compiled without external signing support (required for external signing)");
 #endif
+    }
+    if (!request.params[8].isNull() && request.params[8].get_bool()) {
+        flags |= WALLET_FLAG_SKIP_LEGACY_DESCRIPTORS;
     }
 
     DatabaseOptions options;

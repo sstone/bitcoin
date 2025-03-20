@@ -3560,6 +3560,7 @@ void CWallet::SetupDescriptorScriptPubKeyMans(WalletBatch& batch, const CExtKey&
     AssertLockHeld(cs_wallet);
     for (bool internal : {false, true}) {
         for (OutputType t : OUTPUT_TYPES) {
+            if (IsWalletFlagSet(WALLET_FLAG_SKIP_LEGACY_DESCRIPTORS) && t == OutputType::LEGACY) continue;
             SetupDescriptorScriptPubKeyMan(batch, master_key, t, internal);
         }
     }

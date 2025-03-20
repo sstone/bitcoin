@@ -68,6 +68,16 @@ class WalletDescriptorTest(BitcoinTestFramework):
         assert_equal(bestblock_rec[5:37][::-1].hex(), self.nodes[0].getbestblockhash())
         assert_equal(cache_records, 1000)
 
+    def test_skip_legacy_descriptor(self):
+        self.log.info("Test wallet creation without legacy descriptors")
+        self.nodes[0].createwallet(wallet_name="desc_skip", descriptors=True, skip_legacy_descriptors=True)
+        wallet = self.nodes[0].get_wallet_rpc("desc_skip")
+        wallet.getnewaddress("", "bech32")
+        wallet.getnewaddress("", "bech32m")
+        assert_raises_rpc_error(-12, "No legacy addresses available", wallet.getnewaddress, "", "legacy")
+        for desc in wallet.listdescriptors(True)["descriptors"]:
+            assert(not desc["desc"].startswith("pkh"))
+
     def run_test(self):
         # Make a descriptor wallet
         self.log.info("Making a descriptor wallet")
@@ -255,6 +265,7 @@ class WalletDescriptorTest(BitcoinTestFramework):
         assert_raises_rpc_error(-4, "Unexpected legacy entry in descriptor wallet found.", self.nodes[0].loadwallet, "crashme")
 
         self.test_concurrent_writes()
+        self.test_skip_legacy_descriptor()
 
 
 if __name__ == '__main__':
