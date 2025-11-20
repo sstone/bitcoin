@@ -21,9 +21,9 @@ private:
     std::unique_ptr<BaseIndex::DB> m_db;
     std::pair<uint64_t, uint64_t> m_siphash_key;
     bool AllowPrune() const override { return true; }
-    bool WriteSpenderInfos(const std::vector<std::pair<COutPoint, FlatFilePos>>& items);
-    bool EraseSpenderInfos(const std::vector<std::pair<COutPoint, FlatFilePos>>& items);
-    bool ReadTransaction(const FlatFilePos& pos, CTransactionRef& tx) const;
+    bool WriteSpenderInfos(const std::vector<std::pair<COutPoint, CDiskTxPos>>& items);
+    bool EraseSpenderInfos(const std::vector<std::pair<COutPoint, CDiskTxPos>>& items);
+    bool ReadTransaction(const CDiskTxPos& pos, CTransactionRef& tx, uint256& block_hash) const;
 
 protected:
     interfaces::Chain::NotifyOptions CustomOptions() override;
@@ -40,7 +40,7 @@ public:
     // Destroys unique_ptr to an incomplete type.
     virtual ~TxoSpenderIndex() override;
 
-    CTransactionRef FindSpender(const COutPoint& txo) const;
+    bool FindSpender(const COutPoint& txo, CTransactionRef& tx, uint256& block_hash) const;
 };
 
 /// The global txo spender index. May be null.

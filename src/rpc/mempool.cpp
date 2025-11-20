@@ -624,6 +624,7 @@ static RPCHelpMan gettxspendingprevout()
                     {RPCResult::Type::NUM, "vout", "the vout value of the checked output"},
                     {RPCResult::Type::STR_HEX, "spendingtxid", /*optional=*/true, "the transaction id of the mempool transaction spending this output (omitted if unspent)"},
                     {RPCResult::Type::STR_HEX, "spendingtx", /*optional=*/true, "the transaction spending this output (only if return_spending_tx is set, omitted if unspent)"},
+                    {RPCResult::Type::STR_HEX, "blockhash", /*optional=*/true, "the hash of the spending block (omitted if unspent or the spending tx is not confirmed)"},
                     {RPCResult::Type::ARR, "warnings", /* optional */ true, "If spendingtxid isn't found in the mempool, and the mempool_only option isn't set explicitly, this will advise of issues using the txospenderindex.",
                     {
                         {RPCResult::Type::STR, "", ""},
@@ -703,8 +704,11 @@ static RPCHelpMan gettxspendingprevout()
                     // do nothing, caller has selected to only query the mempool
                 } else if (g_txospenderindex) {
                     // no spending tx in mempool, query txospender index
-                    if (auto spending_tx{g_txospenderindex->FindSpender(prevout)}) {
+                    CTransactionRef spending_tx;
+                    uint256 block_hash;
+                    if (g_txospenderindex->FindSpender(prevout, spending_tx, block_hash)) {
                         o.pushKV("spendingtxid", spending_tx->GetHash().GetHex());
+                        o.pushKV("blockhash", block_hash.GetHex());
                         if (return_spending_tx.value_or(false)) {
                             o.pushKV("spendingtx", EncodeHexTx(*spending_tx));
                         }

@@ -43,20 +43,24 @@ BOOST_FIXTURE_TEST_CASE(txospenderindex_initial_sync, TestChain100Setup)
         spender[i].vin[0].scriptSig << vchSig;
     }
 
-    CreateAndProcessBlock(spender, this->m_coinbase_txns[0]->vout[0].scriptPubKey);
+    CBlock block = CreateAndProcessBlock(spender, this->m_coinbase_txns[0]->vout[0].scriptPubKey);
+
+    CTransactionRef tx;
+    uint256 block_hash;
 
     // Transaction should not be found in the index before it is started.
     for (const auto& outpoint : spent) {
-        BOOST_CHECK(!txospenderindex.FindSpender(outpoint));
+        BOOST_CHECK(!txospenderindex.FindSpender(outpoint, tx, block_hash));
     }
 
     // BlockUntilSyncedToCurrentChain should return false before txospenderindex is started.
     BOOST_CHECK(!txospenderindex.BlockUntilSyncedToCurrentChain());
 
     txospenderindex.Sync();
-
     for (size_t i = 0; i < spent.size(); i++) {
-        BOOST_CHECK_EQUAL(txospenderindex.FindSpender(spent[i])->GetHash(), spender[i].GetHash());
+        BOOST_CHECK(txospenderindex.FindSpender(spent[i], tx, block_hash));
+        BOOST_CHECK_EQUAL(tx->GetHash(), spender[i].GetHash());
+        BOOST_CHECK_EQUAL(block_hash, block.GetHash());
     }
 
     // It is not safe to stop and destroy the index until it finishes handling
