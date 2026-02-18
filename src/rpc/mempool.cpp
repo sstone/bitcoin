@@ -31,6 +31,7 @@
 #include <util/time.h>
 #include <util/vector.h>
 
+#include <map>
 #include <string_view>
 #include <utility>
 
@@ -826,8 +827,7 @@ static RPCHelpMan gettxspendingprevout()
                                 {"return_spending_tx", UniValueType(UniValue::VBOOL)},
                             }, /*fAllowNull=*/true, /*fStrict=*/true);
 
-            const bool txospenderindex_ready{g_txospenderindex && g_txospenderindex->BlockUntilSyncedToCurrentChain()};
-            const bool mempool_only{options.exists("mempool_only") ? options["mempool_only"].get_bool() : !txospenderindex_ready};
+            const bool mempool_only{options.exists("mempool_only") ? options["mempool_only"].get_bool() : !g_txospenderindex};
             const bool return_spending_tx{options.exists("return_spending_tx") ? options["return_spending_tx"].get_bool() : false};
 
             std::vector<COutPoint> prevouts;
@@ -852,22 +852,38 @@ static RPCHelpMan gettxspendingprevout()
             }
 
             const CTxMemPool& mempool = EnsureAnyMemPool(request.context);
-            LOCK(mempool.cs);
-
+            std::map<COutPoint, UniValue> mempool_spenders;
             UniValue result{UniValue::VARR};
 
+            // search the mempool first
+            {
+                LOCK(mempool.cs);
+                for (const COutPoint& prevout : prevouts) {
+                    const CTransaction* spendingTx = mempool.GetConflictTx(prevout);
+                    if (spendingTx != nullptr) {
+                        UniValue o(UniValue::VOBJ);
+                        o.pushKV("txid", prevout.hash.ToString());
+                        o.pushKV("vout", prevout.n);
+                        o.pushKV("spendingtxid", spendingTx->GetHash().ToString());
+                        if (return_spending_tx) {
+                            o.pushKV("spendingtx", EncodeHexTx(*spendingTx));
+                        }
+                        mempool_spenders[prevout] = std::move(o);
+                    }
+                }
+            }
+            // if search is not limited to the mempool and no spenders we found, search the txospenderindex
+            bool txospenderindex_ready{(mempool_only || mempool_spenders.size() == prevouts.size()) || (g_txospenderindex && g_txospenderindex->BlockUntilSyncedToCurrentChain())};
             for (const COutPoint& prevout : prevouts) {
+                auto it = mempool_spenders.find(prevout);
+                if (it != mempool_spenders.end()) {
+                    result.push_back(std::move(it->second));
+                    continue;
+                }
                 UniValue o(UniValue::VOBJ);
                 o.pushKV("txid", prevout.hash.ToString());
                 o.pushKV("vout", prevout.n);
-
-                const CTransaction* spendingTx = mempool.GetConflictTx(prevout);
-                if (spendingTx != nullptr) {
-                    o.pushKV("spendingtxid", spendingTx->GetHash().ToString());
-                    if (return_spending_tx) {
-                        o.pushKV("spendingtx", EncodeHexTx(*spendingTx));
-                    }
-                } else if (mempool_only) {
+                if (mempool_only) {
                     // do nothing, caller has selected to only query the mempool
                 } else if (!txospenderindex_ready) {
                     throw JSONRPCError(RPC_MISC_ERROR, strprintf("No spending tx for the outpoint %s:%d in mempool, and txospenderindex is unavailable.", prevout.hash.GetHex(), prevout.n));
